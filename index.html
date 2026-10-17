@@ -2922,24 +2922,35 @@ PAGE_RENDERERS['admin:users'] = function (el) {
   el.innerHTML = `
     <div class="page-head"><h2>ผู้ใช้งานระบบ</h2></div>
     <p class="lede">จัดการบัญชีผู้ใช้งานในระบบ — เพิ่ม แก้ไข หรือลบผู้ใช้ (การเปลี่ยนแปลงจะมีผลกับข้อมูลในระบบนี้เท่านั้น)</p>
-    <div class="toolbar"><button class="btn btn-primary btn-sm" id="btnAddUser">+ เพิ่มผู้ใช้งาน</button></div>
+    <div class="toolbar" style="display:flex; gap:10px; flex-wrap:wrap; align-items:center; margin-bottom:12px;">
+      <button class="btn btn-primary btn-sm" id="btnAddUser">+ เพิ่มผู้ใช้งาน</button>
+      <input id="userSearch" type="search" placeholder="ค้นหา ชื่อผู้ใช้ / ชื่อ / รหัสนักศึกษา" style="flex:1; min-width:220px; max-width:380px; padding:8px 12px; border:1px solid #cdd8e4; border-radius:8px; font:inherit; font-size:14px;">
+      <div id="userCats" style="display:flex; gap:6px; flex-wrap:wrap;"></div>
+    </div>
     <div class="card" style="padding:0; overflow-x:auto;"><table class="data-table">
-      <thead><tr><th>ชื่อผู้ใช้</th><th>ชื่อเต็ม</th><th>สิทธิ์</th><th style="width:120px;">จัดการ</th></tr></thead>
+      <thead><tr><th>ชื่อผู้ใช้</th><th>รหัสนักศึกษา</th><th>ชื่อเต็ม</th><th>กลุ่มผู้ใช้</th><th style="width:120px;">จัดการ</th></tr></thead>
       <tbody id="userAdminRows"></tbody>
     </table></div>
     <div id="userModalRoot"></div>`;
 
+  let uCat = 'all', uQ = '';
   function draw() {
-    document.getElementById('userAdminRows').innerHTML = USERS.map(u => `
+    const cats = [['all', 'ทั้งหมด'], ['admin', 'ผู้ดูแลระบบ'], ['teacher', 'อาจารย์'], ['student', 'นักศึกษา']];
+    document.getElementById('userCats').innerHTML = cats.map(([k, l]) => `<button class="btn btn-sm ${uCat === k ? 'btn-primary' : 'btn-ghost'}" data-ucat="${k}">${l} (${k === 'all' ? USERS.length : USERS.filter(u => u.role === k).length})</button>`).join('');
+    document.querySelectorAll('[data-ucat]').forEach(b => b.addEventListener('click', () => { uCat = b.dataset.ucat; draw(); }));
+    const q = uQ.trim().toLowerCase();
+    const list = USERS.filter(u => (uCat === 'all' || u.role === uCat) && (!q || [u.username, u.full_name, u.role === 'student' ? stuCodeOf(u) : ''].some(x => String(x || '').toLowerCase().includes(q))));
+    document.getElementById('userAdminRows').innerHTML = list.map(u => `
       <tr>
         <td>${escapeHtml(u.username)}</td>
+        <td>${u.role === 'student' ? `<span class="chip">${escapeHtml(stuCodeOf(u)) || '—'}</span>` : '—'}</td>
         <td>${escapeHtml(u.full_name)}</td>
-        <td><span class="role-badge ${u.role}">${u.role}</span></td>
+        <td><span class="role-badge ${u.role}">${({ admin: 'ผู้ดูแลระบบ', teacher: 'อาจารย์', student: 'นักศึกษา' })[u.role] || u.role}</span></td>
         <td><div style="display:flex; gap:5px;">
           <button class="btn btn-ghost btn-sm" data-uedit="${u.id}">แก้ไข</button>
           <button class="btn btn-danger btn-sm" data-udel="${u.id}">ลบ</button>
         </div></td>
-      </tr>`).join('') || `<tr><td colspan="4"><div class="empty-state">ยังไม่มีผู้ใช้งาน</div></td></tr>`;
+      </tr>`).join('') || `<tr><td colspan="5"><div class="empty-state">${USERS.length ? 'ไม่พบผู้ใช้งานที่ตรงกับการค้นหา' : 'ยังไม่มีผู้ใช้งาน'}</div></td></tr>`;
     document.querySelectorAll('[data-uedit]').forEach(b => b.addEventListener('click', () => openUserModal(USERS.find(u => u.id === Number(b.dataset.uedit)))));
     document.querySelectorAll('[data-udel]').forEach(b => b.addEventListener('click', async () => {
       const id = Number(b.dataset.udel);
@@ -2954,6 +2965,7 @@ PAGE_RENDERERS['admin:users'] = function (el) {
     }));
   }
   document.getElementById('btnAddUser').addEventListener('click', () => openUserModal(null));
+  document.getElementById('userSearch').addEventListener('input', e => { uQ = e.target.value; draw(); });
   draw();
 
   function openUserModal(user) {
